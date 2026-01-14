@@ -1,312 +1,224 @@
-# ElkInjector
+# Elasticsearch v8 Data Injector
 
-Outil d'injection de données pour Elasticsearch - logs, métriques et documents JSON personnalisés.
+Injecteur de donnees en continu pour Elasticsearch v8.x, entierement containerise avec Docker.
 
-## Fonctionnalités
+## Fonctionnalites
 
-- **Génération de logs** : Logs d'application réalistes avec différents niveaux (DEBUG, INFO, WARNING, ERROR, CRITICAL), stack traces, et métadonnées de service
-- **Génération de métriques** : Métriques système (CPU, mémoire, disque, réseau) et applicatives (latence, JVM, base de données)
-- **Documents JSON personnalisés** : Templates avec placeholders dynamiques pour générer des documents sur mesure
-- **Injection en masse** : Support du bulk indexing pour des performances optimales
-- **Mode continu** : Injection continue de données pour les tests de charge
-- **Configuration flexible** : Fichiers YAML, variables d'environnement, ou arguments CLI
+- Compatible **uniquement** avec Elasticsearch v8.x
+- Support HTTPS et authentification (securite v8)
+- Generation de donnees synthetiques (logs, metriques, evenements)
+- Injection en bulk optimisee pour les performances
+- Configuration flexible via variables d'environnement
+- Arret gracieux avec gestion des signaux SIGTERM/SIGINT
+- Health checks integres
+- Mode simple (sans securite) pour le developpement local
 
-## Installation
+## Types de donnees generes
 
-```bash
-# Cloner le repository
-git clone https://github.com/E4Itraining/elkinjector.git
-cd elkinjector
-
-# Installer avec pip
-pip install -e .
-
-# Ou installer les dépendances de développement
-pip install -e ".[dev]"
+### Logs
+```json
+{
+  "@timestamp": "2024-01-15T10:30:00Z",
+  "level": "INFO",
+  "service": "api-gateway",
+  "message": "Request completed successfully: GET /api/v1/users",
+  "environment": "production",
+  "region": "eu-west-1",
+  "host": "api-gateway-1.internal",
+  "trace_id": "abc123...",
+  "span_id": "def456..."
+}
 ```
 
-## Docker
-
-### Démarrage rapide avec Docker Compose
-
-```bash
-# Démarrer Elasticsearch + Kibana
-make up
-
-# Ou sans Make
-docker compose up -d elasticsearch kibana
+### Metriques
+```json
+{
+  "@timestamp": "2024-01-15T10:30:00Z",
+  "metric_name": "cpu",
+  "metric_value": 45.23,
+  "unit": "percent",
+  "service": "user-service",
+  "environment": "production",
+  "region": "us-east-1",
+  "host": "user-service-2.internal"
+}
 ```
 
-Accès aux services :
-- **Elasticsearch** : http://localhost:9200
-- **Kibana** : http://localhost:5601
-
-### Injection de données avec Docker
-
-```bash
-# Injecter 10,000 logs
-make inject-logs
-
-# Injecter 10,000 métriques
-make inject-metrics
-
-# Injecter logs + métriques
-make inject-all
-
-# Mode continu
-make inject-continuous
-
-# Injection personnalisée
-make inject-custom ARGS="-n 5000 --logs --no-metrics"
+### Evenements
+```json
+{
+  "@timestamp": "2024-01-15T10:30:00Z",
+  "event_type": "purchase",
+  "event_data": {
+    "user_id": "user_12345",
+    "amount": 99.99,
+    "currency": "EUR"
+  },
+  "service": "payment-service",
+  "environment": "production"
+}
 ```
 
-### Commandes Docker disponibles
+## Demarrage rapide
+
+### Mode simple (developpement local)
+
+Le mode simple desactive la securite Elasticsearch pour faciliter les tests :
 
 ```bash
-make help              # Afficher l'aide
-make build             # Construire les images
-make up                # Démarrer ES + Kibana
-make down              # Arrêter tous les conteneurs
-make logs              # Voir les logs
-make check             # Vérifier la connexion ES
-make clean             # Supprimer les indices ElkInjector
-make shell             # Ouvrir un shell dans le conteneur
+# Demarrer Elasticsearch + Injecteur
+docker-compose -f docker-compose-simple.yml up -d
+
+# Avec Kibana (optionnel)
+docker-compose -f docker-compose-simple.yml --profile with-kibana up -d
+
+# Voir les logs de l'injecteur
+docker logs -f data-injector-simple
+
+# Verifier les donnees dans Elasticsearch
+curl http://localhost:9200/injector-data/_count
 ```
 
-### Sans Make
+### Mode securise (production)
+
+Le mode complet utilise HTTPS et l'authentification :
 
 ```bash
-# Construire l'image
-docker compose build
+# Copier et configurer les variables d'environnement
+cp .env.example .env
+# Editer .env avec vos parametres
 
-# Démarrer l'infrastructure
-docker compose up -d elasticsearch kibana
+# Demarrer la stack complete
+docker-compose up -d
 
-# Exécuter une commande
-docker compose run --rm elkinjector elkinjector inject -n 10000
+# Avec Kibana
+docker-compose --profile with-kibana up -d
 
-# Vérifier la connexion
-docker compose run --rm elkinjector elkinjector check
-
-# Arrêter
-docker compose down
-```
-
-### Variables d'environnement Docker
-
-| Variable | Description | Défaut |
-|----------|-------------|--------|
-| `ES_HOST` | Hôte Elasticsearch | `elasticsearch` |
-| `ES_PORT` | Port Elasticsearch | `9200` |
-| `ES_SCHEME` | Schéma (http/https) | `http` |
-| `ES_USERNAME` | Nom d'utilisateur | - |
-| `ES_PASSWORD` | Mot de passe | - |
-| `INJECTION_BATCH_SIZE` | Taille des lots | `1000` |
-| `INJECTION_INTERVAL` | Intervalle (secondes) | `1.0` |
-
-## Utilisation rapide
-
-### Vérifier la connexion
-
-```bash
-elkinjector check -h localhost -p 9200
-```
-
-### Injecter des données
-
-```bash
-# Injection basique (logs + métriques)
-elkinjector inject -h localhost -p 9200
-
-# Injecter 10000 documents
-elkinjector inject -n 10000
-
-# Mode continu avec intervalle de 0.5s
-elkinjector inject --continuous -i 0.5
-
-# Seulement les logs
-elkinjector inject --logs --no-metrics
-
-# Avec authentification
-elkinjector inject -u elastic -P password --scheme https
-```
-
-### Générer un fichier de configuration
-
-```bash
-elkinjector init-config -o config.yaml
-```
-
-### Nettoyer les indices
-
-```bash
-elkinjector clean --prefix elkinjector
+# Voir les logs
+docker logs -f data-injector
 ```
 
 ## Configuration
 
-### Fichier YAML
-
-```yaml
-elasticsearch:
-  host: localhost
-  port: 9200
-  scheme: http
-  username: null
-  password: null
-  timeout: 30
-
-injection:
-  batch_size: 1000
-  interval_seconds: 1.0
-  total_documents: null
-  continuous: false
-  index_prefix: elkinjector
-
-logs:
-  enabled: true
-  index_name: logs
-  log_levels: [DEBUG, INFO, WARNING, ERROR, CRITICAL]
-  services: [api-gateway, auth-service, user-service]
-
-metrics:
-  enabled: true
-  index_name: metrics
-  metric_types: [cpu, memory, disk, network, request_latency]
-  hosts: [server-01, server-02, server-03]
-
-json:
-  enabled: false
-  index_name: documents
-  template: null
-  template_file: null
-```
-
 ### Variables d'environnement
 
+| Variable | Description | Valeur par defaut |
+|----------|-------------|-------------------|
+| `ES_HOST` | URL Elasticsearch | `https://elasticsearch:9200` |
+| `ES_USER` | Utilisateur | `elastic` |
+| `ES_PASSWORD` | Mot de passe | `changeme` |
+| `ES_INDEX` | Nom de l'index | `injector-data` |
+| `ES_VERIFY_CERTS` | Verifier certificats SSL | `false` |
+| `ES_CA_CERTS` | Chemin certificat CA | - |
+| `BATCH_SIZE` | Taille du batch | `100` |
+| `INJECTION_INTERVAL` | Intervalle entre batches (sec) | `1.0` |
+| `DATA_TYPE` | Type de donnees (`logs`, `metrics`, `events`) | `logs` |
+| `MAX_RETRIES` | Tentatives de connexion | `5` |
+| `RETRY_DELAY` | Delai entre tentatives (sec) | `5.0` |
+
+### Exemples de configuration
+
+**Injection haute frequence :**
 ```bash
-export ES_HOST=localhost
-export ES_PORT=9200
-export ES_USERNAME=elastic
-export ES_PASSWORD=password
-export ES_SCHEME=https
-export INJECTION_BATCH_SIZE=500
-export INJECTION_INTERVAL=0.5
+BATCH_SIZE=500
+INJECTION_INTERVAL=0.5
 ```
 
-## Templates JSON personnalisés
-
-Créez des documents personnalisés avec des placeholders dynamiques :
-
-```json
-{
-  "@timestamp": "{{timestamp}}",
-  "user": {
-    "id": "{{uuid_short}}",
-    "name": "{{name}}",
-    "email": "{{email}}"
-  },
-  "event": {
-    "type": "{{choice:login,logout,purchase,view}}",
-    "value": "{{float:0:1000}}"
-  },
-  "geo": {
-    "ip": "{{ipv4}}",
-    "country": "{{country}}",
-    "city": "{{city}}"
-  }
-}
+**Injection de metriques :**
+```bash
+DATA_TYPE=metrics
+ES_INDEX=app-metrics
 ```
 
-### Placeholders disponibles
+## Architecture
 
-| Placeholder | Description |
-|------------|-------------|
-| `{{timestamp}}` | Timestamp UTC actuel |
-| `{{uuid}}` | UUID complet |
-| `{{uuid_short}}` | UUID court (8 caractères) |
-| `{{int:min:max}}` | Entier aléatoire |
-| `{{float:min:max}}` | Décimal aléatoire |
-| `{{choice:a,b,c}}` | Choix aléatoire |
-| `{{name}}` | Nom de personne |
-| `{{email}}` | Adresse email |
-| `{{ipv4}}` | Adresse IPv4 |
-| `{{url}}` | URL |
-| `{{country}}` | Pays |
-| `{{city}}` | Ville |
-| `{{company}}` | Nom d'entreprise |
-| `{{sentence}}` | Phrase |
-| `{{bool}}` | Booléen |
-
-Voir tous les placeholders : `elkinjector show-placeholders`
-
-## Utilisation programmatique
-
-```python
-from elkinjector import Config, DataInjector
-
-# Configuration
-config = Config()
-config.elasticsearch.host = "localhost"
-config.elasticsearch.port = 9200
-config.injection.batch_size = 500
-
-# Injection
-with DataInjector(config) as injector:
-    # Injecter un batch
-    success, errors = injector.inject_batch("logs", batch_size=100)
-
-    # Ou lancer l'injection continue
-    stats = injector.run(total_documents=10000)
-    print(f"Injecté: {stats['total_documents']} documents")
+```
+elkinjector/
+├── src/
+│   └── injector.py          # Code principal de l'injecteur
+├── Dockerfile               # Image Docker optimisee
+├── docker-compose.yml       # Stack complete avec securite
+├── docker-compose-simple.yml # Stack simplifiee pour dev
+├── requirements.txt         # Dependances Python
+├── .env.example            # Template de configuration
+└── README.md               # Documentation
 ```
 
-### Générateurs individuels
+## Surveillance
 
-```python
-from elkinjector.generators import LogGenerator, MetricsGenerator, JsonGenerator
-
-# Logs
-log_gen = LogGenerator()
-log_doc = log_gen.generate_one()
-log_batch = log_gen.generate_batch(100)
-
-# Métriques
-metrics_gen = MetricsGenerator()
-metrics_doc = metrics_gen.generate_one()
-
-# JSON personnalisé
-json_gen = JsonGenerator()
-json_gen.set_template({
-    "@timestamp": "{{timestamp}}",
-    "user_id": "{{uuid_short}}",
-    "action": "{{choice:click,view,purchase}}"
-})
-custom_doc = json_gen.generate_one()
-```
-
-## Structure des indices
-
-Les indices créés suivent le pattern `{prefix}-{type}` :
-
-- `elkinjector-logs` : Logs d'application
-- `elkinjector-metrics` : Métriques système
-- `elkinjector-documents` : Documents JSON personnalisés
-
-## Développement
+### Verifier le nombre de documents
 
 ```bash
-# Installer les dépendances de dev
-pip install -e ".[dev]"
+# Mode simple
+curl http://localhost:9200/injector-data/_count
 
-# Lancer les tests
-pytest
+# Mode securise
+curl -k -u elastic:changeme https://localhost:9200/injector-data/_count
+```
 
-# Formater le code
-black elkinjector
-ruff check elkinjector
+### Voir les derniers documents
+
+```bash
+# Mode simple
+curl http://localhost:9200/injector-data/_search?size=5&sort=@timestamp:desc
+
+# Mode securise
+curl -k -u elastic:changeme "https://localhost:9200/injector-data/_search?size=5&sort=@timestamp:desc"
+```
+
+### Statistiques de l'index
+
+```bash
+curl http://localhost:9200/injector-data/_stats
+```
+
+## Arreter les services
+
+```bash
+# Mode simple
+docker-compose -f docker-compose-simple.yml down
+
+# Avec suppression des volumes
+docker-compose -f docker-compose-simple.yml down -v
+
+# Mode securise
+docker-compose down -v
+```
+
+## Compatibilite
+
+Cet injecteur est compatible **uniquement** avec Elasticsearch v8.x.
+
+La verification de version est effectuee au demarrage :
+- Si Elasticsearch n'est pas en v8.x, l'injecteur s'arrete avec une erreur
+- Les fonctionnalites specifiques a v8 (nouveau client, bulk API) sont utilisees
+
+## Developpement
+
+### Executer localement (sans Docker)
+
+```bash
+# Creer un environnement virtuel
+python -m venv venv
+source venv/bin/activate
+
+# Installer les dependances
+pip install -r requirements.txt
+
+# Configurer les variables
+export ES_HOST=http://localhost:9200
+export ES_VERIFY_CERTS=false
+
+# Lancer l'injecteur
+python src/injector.py
+```
+
+### Build de l'image Docker
+
+```bash
+docker build -t es-injector:latest .
 ```
 
 ## Licence
 
-GPL-3.0 - Voir [LICENSE](LICENSE) pour plus de détails.
+Voir le fichier [LICENSE](LICENSE) pour plus de details.
