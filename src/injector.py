@@ -16,7 +16,7 @@ from typing import Generator, Dict, Any, Optional
 from dataclasses import dataclass, field
 
 from elasticsearch import Elasticsearch
-from elasticsearch.exceptions import ConnectionError, AuthenticationException, ElasticsearchException
+from elasticsearch.exceptions import ConnectionError, AuthenticationException
 
 
 # Configure logging
