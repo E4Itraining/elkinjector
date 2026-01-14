@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  # Elasticsearch single node
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elkinjector-es
+    environment:
+      - node.name=es01
+      - cluster.name=elkinjector-cluster
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - elkinjector-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Kibana for visualization
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: elkinjector-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - xpack.security.enabled=false
+    ports:
+      - "5601:5601"
+    networks:
+      - elkinjector-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # ElkInjector - main service
+  elkinjector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: elkinjector
+    environment:
+      - ES_HOST=elasticsearch
+      - ES_PORT=9200
+      - ES_SCHEME=http
+      - INJECTION_BATCH_SIZE=1000
+      - INJECTION_INTERVAL=1.0
+    networks:
+      - elkinjector-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    # Default: run help command
+    command: ["elkinjector", "--help"]
+    profiles:
+      - tools
+
+  # ElkInjector - inject logs
+  inject-logs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: elkinjector-logs
+    environment:
+      - ES_HOST=elasticsearch
+      - ES_PORT=9200
+      - ES_SCHEME=http
+    networks:
+      - elkinjector-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    command: ["elkinjector", "inject", "--logs", "--no-metrics", "--no-json", "-n", "10000"]
+    profiles:
+      - inject-logs
+
+  # ElkInjector - inject metrics
+  inject-metrics:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: elkinjector-metrics
+    environment:
+      - ES_HOST=elasticsearch
+      - ES_PORT=9200
+      - ES_SCHEME=http
+    networks:
+      - elkinjector-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    command: ["elkinjector", "inject", "--no-logs", "--metrics", "--no-json", "-n", "10000"]
+    profiles:
+      - inject-metrics
+
+  # ElkInjector - inject all (continuous)
+  inject-continuous:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: elkinjector-continuous
+    environment:
+      - ES_HOST=elasticsearch
+      - ES_PORT=9200
+      - ES_SCHEME=http
+      - INJECTION_BATCH_SIZE=500
+      - INJECTION_INTERVAL=0.5
+    networks:
+      - elkinjector-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    command: ["elkinjector", "inject", "--continuous", "-b", "500", "-i", "0.5"]
+    profiles:
+      - continuous
+
+networks:
+  elkinjector-network:
+    driver: bridge
+
+volumes:
+  elasticsearch-data:
+    driver: local

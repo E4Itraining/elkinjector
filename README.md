@@ -25,6 +25,85 @@ pip install -e .
 pip install -e ".[dev]"
 ```
 
+## Docker
+
+### Démarrage rapide avec Docker Compose
+
+```bash
+# Démarrer Elasticsearch + Kibana
+make up
+
+# Ou sans Make
+docker compose up -d elasticsearch kibana
+```
+
+Accès aux services :
+- **Elasticsearch** : http://localhost:9200
+- **Kibana** : http://localhost:5601
+
+### Injection de données avec Docker
+
+```bash
+# Injecter 10,000 logs
+make inject-logs
+
+# Injecter 10,000 métriques
+make inject-metrics
+
+# Injecter logs + métriques
+make inject-all
+
+# Mode continu
+make inject-continuous
+
+# Injection personnalisée
+make inject-custom ARGS="-n 5000 --logs --no-metrics"
+```
+
+### Commandes Docker disponibles
+
+```bash
+make help              # Afficher l'aide
+make build             # Construire les images
+make up                # Démarrer ES + Kibana
+make down              # Arrêter tous les conteneurs
+make logs              # Voir les logs
+make check             # Vérifier la connexion ES
+make clean             # Supprimer les indices ElkInjector
+make shell             # Ouvrir un shell dans le conteneur
+```
+
+### Sans Make
+
+```bash
+# Construire l'image
+docker compose build
+
+# Démarrer l'infrastructure
+docker compose up -d elasticsearch kibana
+
+# Exécuter une commande
+docker compose run --rm elkinjector elkinjector inject -n 10000
+
+# Vérifier la connexion
+docker compose run --rm elkinjector elkinjector check
+
+# Arrêter
+docker compose down
+```
+
+### Variables d'environnement Docker
+
+| Variable | Description | Défaut |
+|----------|-------------|--------|
+| `ES_HOST` | Hôte Elasticsearch | `elasticsearch` |
+| `ES_PORT` | Port Elasticsearch | `9200` |
+| `ES_SCHEME` | Schéma (http/https) | `http` |
+| `ES_USERNAME` | Nom d'utilisateur | - |
+| `ES_PASSWORD` | Mot de passe | - |
+| `INJECTION_BATCH_SIZE` | Taille des lots | `1000` |
+| `INJECTION_INTERVAL` | Intervalle (secondes) | `1.0` |
+
 ## Utilisation rapide
 
 ### Vérifier la connexion
