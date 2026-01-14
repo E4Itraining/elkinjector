@@ -1,0 +1,81 @@
+# Simplified Docker Compose for local development
+# Uses Elasticsearch v8 with security disabled for easier testing
+
+version: '3.8'
+
+services:
+  # Elasticsearch v8 - Single node with security disabled
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: elasticsearch-simple
+    environment:
+      - node.name=es-node-01
+      - cluster.name=injector-cluster
+      - discovery.type=single-node
+      # Disable security for local development
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      # JVM heap size
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch-data-simple:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - elastic-network-simple
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # Data injector service (no auth needed)
+  injector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: data-injector-simple
+    environment:
+      - ES_HOST=http://elasticsearch:9200
+      - ES_USER=
+      - ES_PASSWORD=
+      - ES_INDEX=${ES_INDEX:-injector-data}
+      - ES_VERIFY_CERTS=false
+      - BATCH_SIZE=${BATCH_SIZE:-100}
+      - INJECTION_INTERVAL=${INJECTION_INTERVAL:-1.0}
+      - DATA_TYPE=${DATA_TYPE:-logs}
+      - MAX_RETRIES=10
+      - RETRY_DELAY=5.0
+    networks:
+      - elastic-network-simple
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Kibana (optional, activate with --profile with-kibana)
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: kibana-simple
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - elastic-network-simple
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    profiles:
+      - with-kibana
+
+volumes:
+  elasticsearch-data-simple:
+    driver: local
+
+networks:
+  elastic-network-simple:
+    driver: bridge

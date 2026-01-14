@@ -1,0 +1,154 @@
+version: '3.8'
+
+services:
+  # Elasticsearch v8 - Single node setup
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: elasticsearch
+    environment:
+      # Cluster configuration
+      - node.name=es-node-01
+      - cluster.name=injector-cluster
+      - discovery.type=single-node
+
+      # Security settings for v8
+      - xpack.security.enabled=true
+      - xpack.security.enrollment.enabled=false
+
+      # HTTPS configuration
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/es-node-01/es-node-01.key
+      - xpack.security.http.ssl.certificate=certs/es-node-01/es-node-01.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+
+      # Transport layer security
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/es-node-01/es-node-01.key
+      - xpack.security.transport.ssl.certificate=certs/es-node-01/es-node-01.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+
+      # Set password for elastic user
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
+
+      # JVM heap size
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+
+      # Allow running as root (for development)
+      - xpack.license.self_generated.type=basic
+
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+      - elasticsearch-certs:/usr/share/elasticsearch/config/certs
+
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+
+    networks:
+      - elastic-network
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s --cacert config/certs/ca/ca.crt -u elastic:${ELASTIC_PASSWORD:-changeme} https://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # Certificate setup container (runs once)
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: es-setup
+    volumes:
+      - elasticsearch-certs:/usr/share/elasticsearch/config/certs
+    user: "0"
+    command: >
+      bash -c '
+        if [ ! -f config/certs/ca/ca.crt ]; then
+          echo "Creating CA and certificates..."
+          bin/elasticsearch-certutil ca --silent --pem -out config/certs/ca.zip
+          unzip config/certs/ca.zip -d config/certs
+
+          bin/elasticsearch-certutil cert --silent --pem -out config/certs/certs.zip \
+            --name es-node-01 \
+            --dns es-node-01,elasticsearch,localhost \
+            --ip 127.0.0.1 \
+            --ca-cert config/certs/ca/ca.crt \
+            --ca-key config/certs/ca/ca.key
+          unzip config/certs/certs.zip -d config/certs
+
+          echo "Setting permissions..."
+          chmod -R 755 config/certs
+          echo "Certificates created successfully!"
+        else
+          echo "Certificates already exist, skipping creation."
+        fi
+      '
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f config/certs/ca/ca.crt ]"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks:
+      - elastic-network
+
+  # Kibana for visualization (optional)
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD:-changeme}
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      - SERVER_SSL_ENABLED=false
+    volumes:
+      - elasticsearch-certs:/usr/share/kibana/config/certs:ro
+      - kibana-data:/usr/share/kibana/data
+    ports:
+      - "5601:5601"
+    networks:
+      - elastic-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    profiles:
+      - with-kibana
+
+  # Data injector service
+  injector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: data-injector
+    environment:
+      - ES_HOST=https://elasticsearch:9200
+      - ES_USER=elastic
+      - ES_PASSWORD=${ELASTIC_PASSWORD:-changeme}
+      - ES_INDEX=${ES_INDEX:-injector-data}
+      - ES_VERIFY_CERTS=false
+      - BATCH_SIZE=${BATCH_SIZE:-100}
+      - INJECTION_INTERVAL=${INJECTION_INTERVAL:-1.0}
+      - DATA_TYPE=${DATA_TYPE:-logs}
+      - MAX_RETRIES=10
+      - RETRY_DELAY=5.0
+    networks:
+      - elastic-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  elasticsearch-data:
+    driver: local
+  elasticsearch-certs:
+    driver: local
+  kibana-data:
+    driver: local
+
+networks:
+  elastic-network:
+    driver: bridge
