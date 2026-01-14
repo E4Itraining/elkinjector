@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "elkinjector"
+version = "1.0.0"
+description = "Data injection tool for Elasticsearch - logs, metrics, and JSON documents"
+readme = "README.md"
+license = {text = "GPL-3.0"}
+requires-python = ">=3.9"
+authors = [
+    {name = "E4Itraining"}
+]
+keywords = ["elasticsearch", "elk", "data-injection", "logs", "metrics"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: System :: Logging",
+]
+dependencies = [
+    "elasticsearch>=8.0.0",
+    "click>=8.0.0",
+    "faker>=18.0.0",
+    "pyyaml>=6.0",
+    "python-dateutil>=2.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+elkinjector = "elkinjector.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/E4Itraining/elkinjector"
+Repository = "https://github.com/E4Itraining/elkinjector"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["elkinjector*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N"]

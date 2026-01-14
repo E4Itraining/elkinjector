@@ -1,0 +1,87 @@
+# ElkInjector Configuration Example
+# Copy this file to elkinjector.yaml and customize as needed
+
+elasticsearch:
+  host: localhost
+  port: 9200
+  scheme: http
+  # For HTTPS with authentication:
+  # scheme: https
+  # username: elastic
+  # password: your_password
+  # Or use API key:
+  # api_key: your_api_key
+  # SSL configuration:
+  # ca_certs: /path/to/ca.crt
+  # verify_certs: true
+  timeout: 30
+
+injection:
+  # Number of documents per batch
+  batch_size: 1000
+  # Seconds between batches
+  interval_seconds: 1.0
+  # Total documents to inject (null for unlimited in continuous mode)
+  total_documents: null
+  # Run continuously until stopped
+  continuous: false
+  # Prefix for all indices
+  index_prefix: elkinjector
+
+logs:
+  enabled: true
+  index_name: logs
+  log_levels:
+    - DEBUG
+    - INFO
+    - WARNING
+    - ERROR
+    - CRITICAL
+  # Weights for log level distribution
+  log_level_weights:
+    - 10   # DEBUG
+    - 50   # INFO
+    - 25   # WARNING
+    - 10   # ERROR
+    - 5    # CRITICAL
+  services:
+    - api-gateway
+    - auth-service
+    - user-service
+    - payment-service
+    - notification-service
+  # Include stack traces for errors
+  include_stack_trace: true
+  # Probability of stack trace (0.0 to 1.0)
+  stack_trace_probability: 0.1
+
+metrics:
+  enabled: true
+  index_name: metrics
+  metric_types:
+    - cpu
+    - memory
+    - disk
+    - network
+    - request_latency
+    # Additional metric types:
+    # - jvm
+    # - database
+  hosts:
+    - server-01
+    - server-02
+    - server-03
+    - server-04
+  # Include tags with metrics
+  include_tags: true
+
+json:
+  enabled: false
+  index_name: documents
+  # Inline template:
+  # template:
+  #   "@timestamp": "{{timestamp}}"
+  #   user_id: "{{uuid_short}}"
+  #   action: "{{choice:login,logout,purchase}}"
+  # Or load from file:
+  # template_file: /path/to/template.json
