@@ -1,5 +1,17 @@
 # Elasticsearch v8 client
 elasticsearch>=8.0.0,<9.0.0
 
+# CLI framework
+click>=8.0.0
+
+# Fake data generation
+faker>=18.0.0
+
+# YAML configuration support
+pyyaml>=6.0
+
+# Date/time utilities
+python-dateutil>=2.8.0
+
 # For type hints (optional, included in Python 3.8+)
 typing-extensions>=4.0.0
