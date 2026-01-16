@@ -1,5 +1,7 @@
 """Main data injector for ElkInjector."""
 
+from __future__ import annotations
+
 import logging
 import signal
 import sys

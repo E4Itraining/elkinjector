@@ -1,5 +1,7 @@
 """JSON document generator for ElkInjector."""
 
+from __future__ import annotations
+
 import json
 import random
 import re

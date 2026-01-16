@@ -1,5 +1,7 @@
 """Log data generator for ElkInjector."""
 
+from __future__ import annotations
+
 import random
 import traceback
 from typing import Any
