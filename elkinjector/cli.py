@@ -1,5 +1,7 @@
 """Command-line interface for ElkInjector."""
 
+from __future__ import annotations
+
 import json
 import logging
 import sys
