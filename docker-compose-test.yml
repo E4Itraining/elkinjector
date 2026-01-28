@@ -1,0 +1,63 @@
+# Docker Compose for running ElkInjector tests
+# Usage: docker compose -f docker-compose-test.yml up --build --abort-on-container-exit
+
+version: '3.8'
+
+services:
+  # Unit tests (no Elasticsearch required)
+  test-unit:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: elkinjector-test-unit
+    command: >
+      pytest tests/ -v --tb=short
+      --cov=elkinjector --cov-report=term-missing
+      --cov-report=html:/app/coverage-report
+    volumes:
+      - test-coverage:/app/coverage-report
+
+  # Integration tests (with Elasticsearch)
+  test-integration:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: elkinjector-test-integration
+    environment:
+      - ES_HOST=elasticsearch
+      - ES_PORT=9200
+      - ES_SCHEME=http
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    command: >
+      pytest tests/ -v --tb=short
+      --cov=elkinjector --cov-report=term-missing
+    profiles:
+      - integration
+
+  # Elasticsearch for integration tests
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: elasticsearch-test
+    environment:
+      - node.name=es-test-node
+      - cluster.name=test-cluster
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    profiles:
+      - integration
+
+volumes:
+  test-coverage:
+    driver: local

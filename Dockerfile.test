@@ -1,0 +1,33 @@
+# Dockerfile for running ElkInjector tests
+# Usage: docker build -f Dockerfile.test -t elkinjector-test .
+#        docker run --rm elkinjector-test
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir pytest pytest-cov
+
+# Copy application and test code
+COPY elkinjector/ ./elkinjector/
+COPY tests/ ./tests/
+COPY pyproject.toml .
+
+# Install the package in editable mode
+RUN pip install --no-cache-dir -e .
+
+# Default command: run tests with coverage
+CMD ["pytest", "tests/", "-v", "--tb=short", "--cov=elkinjector", "--cov-report=term-missing"]

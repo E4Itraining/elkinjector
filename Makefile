@@ -1,4 +1,4 @@
-.PHONY: help build up down logs inject-logs inject-metrics inject-all inject-continuous check clean restart
+.PHONY: help build up down logs inject-logs inject-metrics inject-all inject-continuous check clean restart test test-cov test-docker test-docker-integration test-html
 
 # Default target
 help:
@@ -20,6 +20,13 @@ help:
 	@echo "  inject-continuous  Start continuous injection"
 	@echo "  inject-custom      Inject with custom args (use ARGS=)"
 	@echo ""
+	@echo "Testing:"
+	@echo "  test               Run unit tests locally (Python)"
+	@echo "  test-cov           Run tests with coverage report"
+	@echo "  test-html          Run tests with HTML coverage report"
+	@echo "  test-docker        Run unit tests via Docker"
+	@echo "  test-docker-integration  Run integration tests via Docker (with ES)"
+	@echo ""
 	@echo "Management:"
 	@echo "  check              Check Elasticsearch connection"
 	@echo "  clean              Delete all ElkInjector indices"
@@ -29,6 +36,8 @@ help:
 	@echo "  make up                           # Start ES + Kibana"
 	@echo "  make inject-logs                  # Inject logs"
 	@echo "  make inject-custom ARGS='-n 5000' # Custom injection"
+	@echo "  make test                         # Run tests"
+	@echo "  make test-docker                  # Run tests in Docker"
 
 # Build Docker images
 build:
@@ -71,6 +80,26 @@ inject-continuous: build
 # Custom injection (use ARGS= to pass arguments)
 inject-custom: build
 	docker compose run --rm elkinjector elkinjector inject $(ARGS)
+
+# Run unit tests locally (Python)
+test:
+	python run_tests.py
+
+# Run tests with coverage report
+test-cov:
+	python run_tests.py --cov
+
+# Run tests with HTML coverage report
+test-html:
+	python run_tests.py --cov --html
+
+# Run unit tests via Docker
+test-docker:
+	docker compose -f docker-compose-test.yml up --build --abort-on-container-exit test-unit
+
+# Run integration tests via Docker (with Elasticsearch)
+test-docker-integration:
+	docker compose -f docker-compose-test.yml --profile integration up --build --abort-on-container-exit test-integration
 
 # Check connection
 check: build

@@ -8,10 +8,12 @@ Injecteur de donnees en continu pour Elasticsearch v8.x, entierement containeris
 - Support HTTPS et authentification (securite v8)
 - Generation de donnees synthetiques (logs, metriques, evenements)
 - Injection en bulk optimisee pour les performances
-- Configuration flexible via variables d'environnement
+- Configuration flexible via variables d'environnement, YAML ou CLI
 - Arret gracieux avec gestion des signaux SIGTERM/SIGINT
 - Health checks integres
 - Mode simple (sans securite) pour le developpement local
+- Templates JSON personnalisables avec 30+ placeholders
+- Suite de tests unitaires complete
 
 ## Types de donnees generes
 
@@ -134,15 +136,115 @@ ES_INDEX=app-metrics
 
 ```
 elkinjector/
+├── elkinjector/                 # Package Python principal
+│   ├── __init__.py             # Exports du package
+│   ├── cli.py                  # Interface CLI (Click)
+│   ├── client.py               # Client Elasticsearch
+│   ├── config.py               # Gestion de la configuration
+│   ├── injector.py             # Orchestrateur d'injection
+│   └── generators/             # Generateurs de donnees
+│       ├── base.py             # Classe abstraite BaseGenerator
+│       ├── logs.py             # Generateur de logs
+│       ├── metrics.py          # Generateur de metriques
+│       └── json_generator.py   # Generateur JSON personnalise
+├── tests/                       # Suite de tests
+│   ├── conftest.py             # Fixtures partagees
+│   ├── test_config.py          # Tests de configuration
+│   ├── test_client.py          # Tests du client ES
+│   ├── test_generators.py      # Tests des generateurs
+│   ├── test_injector.py        # Tests de l'injecteur
+│   └── test_cli.py             # Tests de l'interface CLI
 ├── src/
-│   └── injector.py          # Code principal de l'injecteur
-├── Dockerfile               # Image Docker optimisee
-├── docker-compose.yml       # Stack complete avec securite
-├── docker-compose-simple.yml # Stack simplifiee pour dev
-├── requirements.txt         # Dependances Python
-├── .env.example            # Template de configuration
-└── README.md               # Documentation
+│   └── injector.py             # Injecteur legacy (Docker)
+├── Dockerfile                   # Image Docker de production
+├── Dockerfile.test              # Image Docker pour les tests
+├── docker-compose.yml           # Stack complete avec securite
+├── docker-compose-simple.yml    # Stack simplifiee pour dev
+├── docker-compose-test.yml      # Stack de tests (Docker)
+├── run_tests.py                 # Script de lancement des tests
+├── Makefile                     # Commandes Make
+├── pyproject.toml               # Configuration du projet Python
+├── requirements.txt             # Dependances Python
+├── config.example.yaml          # Exemple de configuration YAML
+├── .env.example                 # Template de configuration
+└── README.md                    # Documentation
 ```
+
+## Tests
+
+ElkInjector dispose d'une suite de tests unitaires couvrant la configuration, les generateurs de donnees, le client Elasticsearch, l'injecteur et l'interface CLI.
+
+### Pre-requis pour les tests
+
+```bash
+# Installer les dependances de developpement
+pip install -e ".[dev]"
+```
+
+### Executer les tests localement (Python)
+
+```bash
+# Lancer tous les tests
+python run_tests.py
+
+# Avec rapport de couverture
+python run_tests.py --cov
+
+# Avec rapport HTML de couverture
+python run_tests.py --cov --html
+
+# Tester un fichier specifique
+python run_tests.py --file tests/test_generators.py
+
+# Filtrer par nom de test
+python run_tests.py -k TestLogGenerator
+
+# Ou directement avec pytest
+pytest tests/ -v
+pytest tests/ -v --cov=elkinjector --cov-report=term-missing
+```
+
+### Executer les tests via Docker
+
+Les tests peuvent etre executes dans un conteneur Docker, sans aucune dependance locale :
+
+```bash
+# Tests unitaires via Docker
+docker compose -f docker-compose-test.yml up --build --abort-on-container-exit test-unit
+
+# Tests d'integration avec Elasticsearch
+docker compose -f docker-compose-test.yml --profile integration up --build --abort-on-container-exit test-integration
+```
+
+### Executer les tests via Make
+
+```bash
+# Tests unitaires locaux
+make test
+
+# Tests avec couverture
+make test-cov
+
+# Tests avec rapport HTML
+make test-html
+
+# Tests unitaires via Docker
+make test-docker
+
+# Tests d'integration via Docker (avec Elasticsearch)
+make test-docker-integration
+```
+
+### Structure des tests
+
+| Fichier | Description |
+|---------|-------------|
+| `tests/conftest.py` | Fixtures pytest partagees (configurations de test) |
+| `tests/test_config.py` | Tests des dataclasses de configuration, chargement YAML, variables d'environnement |
+| `tests/test_client.py` | Tests du client Elasticsearch (mock), connexion, ping, bulk, CRUD index |
+| `tests/test_generators.py` | Tests des generateurs (logs, metriques, JSON), placeholders, templates |
+| `tests/test_injector.py` | Tests de l'orchestrateur d'injection, batch, callbacks, signaux |
+| `tests/test_cli.py` | Tests de l'interface CLI (commandes, options, aide) |
 
 ## Surveillance
 
@@ -202,14 +304,17 @@ La verification de version est effectuee au demarrage :
 python -m venv venv
 source venv/bin/activate
 
-# Installer les dependances
-pip install -r requirements.txt
+# Installer les dependances (production + dev)
+pip install -e ".[dev]"
 
 # Configurer les variables
 export ES_HOST=http://localhost:9200
 export ES_VERIFY_CERTS=false
 
 # Lancer l'injecteur
+elkinjector inject -h localhost -p 9200
+
+# Ou avec le script legacy
 python src/injector.py
 ```
 
@@ -217,6 +322,25 @@ python src/injector.py
 
 ```bash
 docker build -t es-injector:latest .
+```
+
+### Commandes CLI disponibles
+
+```bash
+# Injection de donnees
+elkinjector inject -h localhost -p 9200 -n 10000
+
+# Verifier la connexion
+elkinjector check -h localhost -p 9200
+
+# Supprimer les index
+elkinjector clean --prefix elkinjector --force
+
+# Generer un fichier de configuration
+elkinjector init-config -o elkinjector.yaml
+
+# Afficher les placeholders disponibles
+elkinjector show-placeholders
 ```
 
 ## Licence
